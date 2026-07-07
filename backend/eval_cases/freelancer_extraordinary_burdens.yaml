@@ -1,0 +1,40 @@
+case_id: freelancer_extraordinary_burdens
+description: "Employed with changing worksites/abroad, holds fund participations, large unreimbursed medical costs (extraordinary burdens), donations, household craftsmen. Exercises the r19 extraordinary-burdens stub + several single rules."
+firm: steuerkanzlei_mueller
+
+profile:
+  tax_years: [2024]
+  employed_this_year: true
+  employed_whole_year: true
+  marital_status: single
+  marital_status_changed: false
+  children: []
+  receives_pension: false
+  investment_income: false
+  rents_out_property: false
+  holds_participations: true
+  child_over18_in_education: false
+  made_maintenance_payments: false
+  changing_workplaces_abroad: true
+  union_or_association_member: false
+  self_paid_work_equipment: false
+  further_education_costs: false
+  pays_insurance_riester_ruerup: false
+  paid_tax_advice_fees: true
+  made_donations: true
+  disability_self_or_child: false
+  paid_childcare: false
+  extraordinary_burdens: true           # -> r19 stub bundle
+  household_services_craftsmen: true
+
+expected_documents:
+  - wage_tax_cert                       # r1
+  - participation_notifications         # r5
+  - employer_travel_confirmation        # r10
+  - tax_advice_receipts                 # r15
+  - donation_receipts                   # r16
+  - medical_receipts                    # r19 stub bundle
+  - divorce_legal_costs
+  - funeral_costs
+  - craftsmen_invoices                  # r20
+  - operating_cost_statements

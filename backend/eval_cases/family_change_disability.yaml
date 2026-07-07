@@ -1,0 +1,43 @@
+case_id: family_change_disability
+description: "Married this year (marital-status change), employed, a child with a recognized disability, pays childcare and insurance. Exercises the r6 marital-change stub + disability + childcare + insurance."
+firm: steuerkanzlei_mueller
+
+profile:
+  tax_years: [2024]
+  employed_this_year: true
+  employed_whole_year: true
+  marital_status: married
+  marital_status_changed: true          # -> r6 stub bundle
+  children:
+    - {age: 8, in_education: false, lives_elsewhere: false}
+  receives_pension: false
+  investment_income: false
+  rents_out_property: false
+  holds_participations: false
+  child_over18_in_education: false
+  made_maintenance_payments: false
+  changing_workplaces_abroad: false
+  union_or_association_member: false
+  self_paid_work_equipment: false
+  further_education_costs: false
+  pays_insurance_riester_ruerup: true
+  paid_tax_advice_fees: false
+  made_donations: false
+  disability_self_or_child: true
+  paid_childcare: true
+  extraordinary_burdens: false
+  household_services_craftsmen: false
+
+expected_documents:
+  - wage_tax_cert                       # r1
+  - marriage_certificate                # r6 stub bundle
+  - divorce_decree
+  - separation_date_proof
+  - birth_certificate
+  - life_certificate_child_abroad
+  - death_certificate
+  - insurance_certificates              # r14
+  - riester_s92_cert
+  - ruerup_s10_confirmation
+  - disability_notice                   # r17
+  - childcare_invoice                   # r18

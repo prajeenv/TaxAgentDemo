@@ -74,8 +74,8 @@ def test_unknown_session_404(client):
 
 def test_eval_run_all_pass(client):
     ev = client.post("/eval/run", json={}).json()
-    assert ev["total"] == 3
-    assert ev["passed"] == 3
+    assert ev["total"] >= 3           # seed cases; grows as more are added
+    assert ev["passed"] == ev["total"]  # every case must match
 
 
 def test_rules_introspection(client):
