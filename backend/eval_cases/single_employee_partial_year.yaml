@@ -1,0 +1,38 @@
+case_id: single_employee_partial_year
+description: "Single employee, NOT employed the whole year (had a gap), union member, self-paid work equipment, further education. Exercises the r9 non-employment stub bundle."
+firm: steuerkanzlei_mueller
+
+profile:
+  tax_years: [2024]
+  employed_this_year: true
+  employed_whole_year: false     # -> r9 stub bundle
+  marital_status: single
+  marital_status_changed: false
+  children: []
+  receives_pension: false
+  investment_income: false
+  rents_out_property: false
+  holds_participations: false
+  child_over18_in_education: false
+  made_maintenance_payments: false
+  changing_workplaces_abroad: false
+  union_or_association_member: true
+  self_paid_work_equipment: true
+  further_education_costs: true
+  pays_insurance_riester_ruerup: false
+  paid_tax_advice_fees: false
+  made_donations: false
+  disability_self_or_child: false
+  paid_childcare: false
+  extraordinary_burdens: false
+  household_services_craftsmen: false
+
+expected_documents:
+  - wage_tax_cert                       # r1
+  - wage_replacement_proof              # r9 stub bundle
+  - non_employment_period_proof
+  - relative_support_declaration
+  - pension_statements_gap
+  - association_contribution_receipts   # r11
+  - work_equipment_receipts             # r12
+  - further_education_receipts          # r13

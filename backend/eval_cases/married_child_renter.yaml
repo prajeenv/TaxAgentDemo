@@ -1,0 +1,44 @@
+case_id: married_child_renter
+description: "Married, one child in Kita, rents out one flat, employed all year, no other conditions."
+firm: steuerkanzlei_mueller
+
+# The client's answers, as a fixed profile. Unset condition flags are explicitly
+# False here (the client was asked and said no) so the case is fully determined.
+profile:
+  tax_years: [2024]
+  employed_this_year: true
+  employed_whole_year: true
+  marital_status: married
+  marital_status_changed: false
+  children:
+    - {age: 4, in_education: false, lives_elsewhere: false}
+  receives_pension: false
+  investment_income: false
+  rents_out_property: true
+  holds_participations: false
+  child_over18_in_education: false
+  made_maintenance_payments: false
+  changing_workplaces_abroad: false
+  union_or_association_member: false
+  self_paid_work_equipment: false
+  further_education_costs: false
+  pays_insurance_riester_ruerup: false
+  paid_tax_advice_fees: false
+  made_donations: false
+  disability_self_or_child: false
+  paid_childcare: true
+  extraordinary_burdens: false
+  household_services_craftsmen: false
+
+# What the consultant actually required. Note the rental bundle is the FULL stub
+# group (the prototype over-includes by design; the consultant refines depth later).
+expected_documents:
+  - wage_tax_cert            # r1
+  - childcare_invoice        # r18
+  - rental_contract          # r4 stub bundle
+  - annex_v_prior
+  - purchase_contract
+  - acquisition_fees
+  - production_or_purchase_cost
+  - financing_statements
+  - property_cost_records

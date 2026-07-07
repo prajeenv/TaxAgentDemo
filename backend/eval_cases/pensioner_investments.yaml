@@ -1,0 +1,38 @@
+case_id: pensioner_investments
+description: "Retired, receives a pension, has investment income above the allowance, pays insurance, made donations. Not employed."
+firm: steuerkanzlei_mueller
+
+profile:
+  tax_years: [2024]
+  employed_this_year: false
+  employed_whole_year: true      # was retired the whole year -> r9 (not-employed-PERIODS) does not apply
+  marital_status: widowed
+  marital_status_changed: false
+  children: []
+  receives_pension: true
+  investment_income: true
+  rents_out_property: false
+  holds_participations: false
+  child_over18_in_education: false
+  made_maintenance_payments: false
+  changing_workplaces_abroad: false
+  union_or_association_member: false
+  self_paid_work_equipment: false
+  further_education_costs: false
+  pays_insurance_riester_ruerup: true
+  paid_tax_advice_fees: false
+  made_donations: true
+  disability_self_or_child: false
+  paid_childcare: false
+  extraordinary_burdens: false
+  household_services_craftsmen: false
+
+expected_documents:
+  - pension_certificate                 # r2
+  - occupational_pension_cert_s22
+  - pension_wage_tax_cert
+  - investment_annual_tax_certs         # r3
+  - insurance_certificates              # r14
+  - riester_s92_cert
+  - ruerup_s10_confirmation
+  - donation_receipts                   # r16

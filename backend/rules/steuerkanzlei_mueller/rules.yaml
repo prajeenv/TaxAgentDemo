@@ -1,0 +1,226 @@
+# The 20 determination rules for a single firm (proxy ruleset).
+#
+# Each rule is: condition -> the triggering question -> the documents that result if true.
+# Read top-to-bottom, this list is ALSO the interview script for the interactive walk-through.
+#
+# A rule's applicability is a tiny DECLARATIVE predicate over one profile field
+# (`applies_when`), never code. The engine reads the field off the profile and
+# compares it — nothing more. This is what keeps the ruleset editable and the
+# engine trivial.
+#
+# `applies_when` forms supported by the engine:
+#   {field: X, equals: true|false|"str"}          # single field
+#   {any_of: [ {field:..., equals:...}, ... ]}     # true if any sub-predicate is true
+#   {all_of: [ {field:..., equals:...}, ... ]}     # true if all sub-predicates are true
+#
+# Nested rows (4, 6, 9, 19) use `stub_group`: the top-level branch is wired and the
+# FULL bundle is emitted whenever the top condition is true. The real sub-gating is
+# recorded under `refine_subconditions` as INERT DATA the engine never reads — it
+# documents how the consultant would refine the depth later.
+#
+# Editing notes for the consultant:
+#   - change which documents a condition yields  -> edit its `documents` list
+#   - add a new condition                        -> add a rule block
+#   - turn a stub into real gating               -> promote a `refine_subcondition`
+#                                                   into a live rule with its own `applies_when`
+# `near_universal: true` means the agent still asks, but expects "yes" almost always
+# (it is not a real branch).
+
+firm: steuerkanzlei_mueller
+
+rules:
+
+  - id: r1_wages
+    condition_label: "Received wages/salary"
+    triggering_question: "Were you employed during {tax_year}?"
+    applies_when: {field: employed_this_year, equals: true}
+    documents: [wage_tax_cert]
+    near_universal: true
+    nested: false
+
+  - id: r2_pension
+    condition_label: "Receives a pension"
+    triggering_question: "Do you receive any pension — statutory or occupational?"
+    applies_when: {field: receives_pension, equals: true}
+    documents: [pension_certificate, occupational_pension_cert_s22, pension_wage_tax_cert]
+    nested: false
+
+  - id: r3_investment
+    condition_label: "Investment income above the allowance, or tax withheld"
+    triggering_question: "Did you have investment income (interest, dividends, capital gains) — above the tax-free amount, or with tax withheld?"
+    applies_when: {field: investment_income, equals: true}
+    documents: [investment_annual_tax_certs]
+    nested: false
+
+  - id: r4_rental
+    condition_label: "Owns property that is rented out"
+    triggering_question: "Do you rent out any property?"
+    applies_when: {field: rents_out_property, equals: true}
+    nested: true
+    stub_group:
+      label: "Rental income bundle"
+      note: "Top-level branch wired; sub-gating (rented long-term? financed?) deferred to consultant."
+      documents:
+        - rental_contract
+        - annex_v_prior
+        - purchase_contract
+        - acquisition_fees
+        - production_or_purchase_cost
+        - financing_statements
+        - property_cost_records
+      refine_subconditions:
+        - {if: rented_long_term, then_add: [annex_v_prior]}
+        - {if: financed, then_add: [financing_statements]}
+    documents: []
+
+  - id: r5_participations
+    condition_label: "Holds participations/shareholdings"
+    triggering_question: "Do you hold any business participations or shareholdings (partnership, fund)?"
+    applies_when: {field: holds_participations, equals: true}
+    documents: [participation_notifications]
+    nested: false
+
+  - id: r6_marital_change
+    condition_label: "Marital-status change during the year"
+    triggering_question: "Did your marital status change — marriage, divorce, separation, a child born, or death of spouse?"
+    applies_when: {field: marital_status_changed, equals: true}
+    nested: true
+    stub_group:
+      label: "Marital-status-change bundle"
+      note: "Top-level branch wired; per-sub-case document (which certificate) deferred to consultant."
+      documents:
+        - marriage_certificate
+        - divorce_decree
+        - separation_date_proof
+        - birth_certificate
+        - life_certificate_child_abroad
+        - death_certificate
+      refine_subconditions:
+        - {if: got_married, then_add: [marriage_certificate]}
+        - {if: got_divorced, then_add: [divorce_decree]}
+        - {if: separated, then_add: [separation_date_proof]}
+        - {if: child_born, then_add: [birth_certificate]}
+        - {if: child_lives_elsewhere, then_add: [life_certificate_child_abroad]}
+        - {if: spouse_died, then_add: [death_certificate]}
+    documents: []
+
+  - id: r7_child_over18_education
+    condition_label: "Child over 18 in education"
+    triggering_question: "Do you have children over 18 — in education or training?"
+    applies_when: {field: child_over18_in_education, equals: true}
+    documents: [education_proof]
+    nested: false
+
+  - id: r8_maintenance
+    condition_label: "Made maintenance payments"
+    triggering_question: "Did you pay maintenance to a separated/divorced spouse, or to dependants living abroad?"
+    applies_when: {field: made_maintenance_payments, equals: true}
+    documents: [annex_u_exspouse, maintenance_declarations_abroad]
+    nested: false
+
+  - id: r9_not_employed_whole_year
+    condition_label: "Not employed the whole year"
+    triggering_question: "Were there periods you were not employed?"
+    applies_when: {field: employed_whole_year, equals: false}
+    nested: true
+    stub_group:
+      label: "Non-employment-period bundle"
+      note: "Top-level branch wired; which proof (benefit vs. period vs. pension) deferred to consultant."
+      documents:
+        - wage_replacement_proof
+        - non_employment_period_proof
+        - relative_support_declaration
+        - pension_statements_gap
+      refine_subconditions:
+        - {if: received_wage_replacement, then_add: [wage_replacement_proof]}
+        - {if: period_abroad_or_leave, then_add: [non_employment_period_proof]}
+    documents: []
+
+  - id: r10_changing_workplaces
+    condition_label: "Changing workplaces / work away or abroad"
+    triggering_question: "Did your workplace change often, or did you work away from home or abroad?"
+    applies_when: {field: changing_workplaces_abroad, equals: true}
+    documents: [employer_travel_confirmation]
+    nested: false
+
+  - id: r11_association_member
+    condition_label: "Professional association or union member"
+    triggering_question: "Are you in a professional association or union with membership fees?"
+    applies_when: {field: union_or_association_member, equals: true}
+    documents: [association_contribution_receipts]
+    nested: false
+
+  - id: r12_work_equipment
+    condition_label: "Self-paid work equipment/literature"
+    triggering_question: "Did you buy work equipment, tools, or professional literature yourself?"
+    applies_when: {field: self_paid_work_equipment, equals: true}
+    documents: [work_equipment_receipts]
+    nested: false
+
+  - id: r13_further_education
+    condition_label: "Further education / training costs"
+    triggering_question: "Did you pay for further education, training, or courses?"
+    applies_when: {field: further_education_costs, equals: true}
+    documents: [further_education_receipts]
+    nested: false
+
+  - id: r14_insurance
+    condition_label: "Pays insurance / Riester / Rürup"
+    triggering_question: "Do you pay for insurance (health, life, liability, pension)? A Riester or Rürup pension?"
+    applies_when: {field: pays_insurance_riester_ruerup, equals: true}
+    documents: [insurance_certificates, riester_s92_cert, ruerup_s10_confirmation]
+    near_universal: true
+    nested: false
+
+  - id: r15_tax_advice_fees
+    condition_label: "Paid tax-advice or assistance-association fees"
+    triggering_question: "Did you pay for tax advice or a tax-assistance association last year?"
+    applies_when: {field: paid_tax_advice_fees, equals: true}
+    documents: [tax_advice_receipts]
+    nested: false
+
+  - id: r16_donations
+    condition_label: "Made charitable donations"
+    triggering_question: "Did you make any charitable donations?"
+    applies_when: {field: made_donations, equals: true}
+    documents: [donation_receipts]
+    nested: false
+
+  - id: r17_disability
+    condition_label: "Disability (self or child)"
+    triggering_question: "Do you or a child have a recognized disability?"
+    applies_when: {field: disability_self_or_child, equals: true}
+    documents: [disability_notice]
+    nested: false
+
+  - id: r18_childcare
+    condition_label: "Paid childcare costs"
+    triggering_question: "Did you pay for childcare (Kita, daycare)?"
+    applies_when: {field: paid_childcare, equals: true}
+    documents: [childcare_invoice]
+    nested: false
+
+  - id: r19_extraordinary_burdens
+    condition_label: "Extraordinary burdens"
+    triggering_question: "Any large unreimbursed medical costs, divorce costs, or funeral costs?"
+    applies_when: {field: extraordinary_burdens, equals: true}
+    nested: true
+    stub_group:
+      label: "Extraordinary-burdens bundle"
+      note: "Top-level branch wired; which burden (medical vs. divorce vs. funeral) deferred to consultant."
+      documents:
+        - medical_receipts
+        - divorce_legal_costs
+        - funeral_costs
+      refine_subconditions:
+        - {if: had_medical_costs, then_add: [medical_receipts]}
+        - {if: had_divorce_costs, then_add: [divorce_legal_costs]}
+        - {if: had_funeral_costs, then_add: [funeral_costs]}
+    documents: []
+
+  - id: r20_household_services
+    condition_label: "Household services / craftsmen (§35a)"
+    triggering_question: "Did you pay for household services or craftsmen's work at your home?"
+    applies_when: {field: household_services_craftsmen, equals: true}
+    documents: [craftsmen_invoices, operating_cost_statements]
+    nested: false

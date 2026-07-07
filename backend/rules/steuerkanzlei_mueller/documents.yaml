@@ -1,0 +1,265 @@
+# Document catalog for a single firm (proxy ruleset — a realistic stand-in).
+#
+# Each document is an entity referenced by id from rules.yaml. It carries its own
+# metadata (label, group) plus two "do-not-foreclose" flags that the prototype
+# engine CARRIES BUT DOES NOT ENFORCE:
+#   - multi_instance: a document may exist in N instances (e.g. one wage cert per
+#     employer/year). The prototype emits one line per id; it never expands instances.
+#   - instance_scope: "all" | "sample" — whether all instances or a sample are needed.
+#     Carried on the entity so the data model isn't blocked later; unused in prototype logic.
+#
+# Editing note for the consultant: to rename a document change its `label`; to add
+# a new document add a block with a fresh `id` and reference that id from a rule.
+
+firm: steuerkanzlei_mueller
+
+documents:
+  # --- Employment (row 1) ---
+  - id: wage_tax_cert
+    label: "Wage tax certificate(s) (Lohnsteuerbescheinigung)"
+    group: employment
+    multi_instance: true
+    instance_scope: all
+
+  # --- Pension (row 2) ---
+  - id: pension_certificate
+    label: "Pension certificate(s) (statutory / occupational)"
+    group: pension
+    multi_instance: true
+    instance_scope: all
+  - id: occupational_pension_cert_s22
+    label: "§22 occupational pension certificate"
+    group: pension
+    multi_instance: true
+    instance_scope: all
+  - id: pension_wage_tax_cert
+    label: "Wage-tax certificate for pension payments"
+    group: pension
+    multi_instance: true
+    instance_scope: all
+
+  # --- Investment income (row 3) ---
+  - id: investment_annual_tax_certs
+    label: "Annual + tax certificates for all investment income"
+    group: investment
+    multi_instance: true
+    instance_scope: all
+
+  # --- Rental (row 4 — nested/stubbed) ---
+  - id: rental_contract
+    label: "Rental contract (Mietvertrag)"
+    group: rental
+    multi_instance: true
+    instance_scope: all
+  - id: annex_v_prior
+    label: "Annex 'V' from last year's return"
+    group: rental
+    multi_instance: false
+    instance_scope: all
+  - id: purchase_contract
+    label: "Purchase contract for the property"
+    group: rental
+    multi_instance: true
+    instance_scope: all
+  - id: acquisition_fees
+    label: "Notary / court / agent fees"
+    group: rental
+    multi_instance: true
+    instance_scope: all
+  - id: production_or_purchase_cost
+    label: "Total production costs or purchase price"
+    group: rental
+    multi_instance: false
+    instance_scope: all
+  - id: financing_statements
+    label: "Loan statements — debt interest + disagio"
+    group: rental
+    multi_instance: true
+    instance_scope: all
+  - id: property_cost_records
+    label: "Other property costs (utilities, insurance, property tax, refuse)"
+    group: rental
+    multi_instance: true
+    instance_scope: all
+
+  # --- Participations (row 5) ---
+  - id: participation_notifications
+    label: "Provisional notifications of shareholdings"
+    group: participations
+    multi_instance: true
+    instance_scope: all
+
+  # --- Marital-status change (row 6 — nested/stubbed) ---
+  - id: marriage_certificate
+    label: "Marriage certificate"
+    group: marital_change
+    multi_instance: false
+    instance_scope: all
+  - id: divorce_decree
+    label: "Divorce decree"
+    group: marital_change
+    multi_instance: false
+    instance_scope: all
+  - id: separation_date_proof
+    label: "Exact separation date"
+    group: marital_change
+    multi_instance: false
+    instance_scope: all
+  - id: birth_certificate
+    label: "Birth certificate (new child)"
+    group: marital_change
+    multi_instance: true
+    instance_scope: all
+  - id: life_certificate_child_abroad
+    label: "Life certificate (child living elsewhere)"
+    group: marital_change
+    multi_instance: true
+    instance_scope: all
+  - id: death_certificate
+    label: "Death certificate (spouse)"
+    group: marital_change
+    multi_instance: false
+    instance_scope: all
+
+  # --- Child over 18 in education (row 7) ---
+  - id: education_proof
+    label: "Proof of education / voluntary social year / service interruption"
+    group: children
+    multi_instance: true
+    instance_scope: all
+
+  # --- Maintenance payments (row 8) ---
+  - id: annex_u_exspouse
+    label: "Annex 'U' (maintenance to ex-spouse)"
+    group: maintenance
+    multi_instance: false
+    instance_scope: all
+  - id: maintenance_declarations_abroad
+    label: "Maintenance declarations + payment proof (dependants abroad)"
+    group: maintenance
+    multi_instance: true
+    instance_scope: all
+
+  # --- Not employed whole year (row 9 — nested/stubbed) ---
+  - id: wage_replacement_proof
+    label: "Wage-replacement benefit proof (unemployment, sickness, parental, etc.)"
+    group: non_employment
+    multi_instance: true
+    instance_scope: all
+  - id: non_employment_period_proof
+    label: "Proof of non-employment periods (abroad, leave, cure)"
+    group: non_employment
+    multi_instance: true
+    instance_scope: all
+  - id: relative_support_declaration
+    label: "Relative-support declaration"
+    group: non_employment
+    multi_instance: false
+    instance_scope: all
+  - id: pension_statements_gap
+    label: "Pension statements (for the non-employment period)"
+    group: non_employment
+    multi_instance: true
+    instance_scope: all
+
+  # --- Changing workplaces / abroad (row 10) ---
+  - id: employer_travel_confirmation
+    label: "Employer confirmation on changing sites / work abroad / subsistence / travel reimbursement"
+    group: work_travel
+    multi_instance: true
+    instance_scope: all
+
+  # --- Association / union (row 11) ---
+  - id: association_contribution_receipts
+    label: "Receipts for association / union contributions"
+    group: work_costs
+    multi_instance: true
+    instance_scope: all
+
+  # --- Work equipment / literature (row 12) ---
+  - id: work_equipment_receipts
+    label: "Receipts for work equipment, tools, specialist literature"
+    group: work_costs
+    multi_instance: true
+    instance_scope: all
+
+  # --- Further education (row 13) ---
+  - id: further_education_receipts
+    label: "Receipts: course/exam fees, travel, literature, materials"
+    group: work_costs
+    multi_instance: true
+    instance_scope: all
+
+  # --- Insurance / Riester / Rürup (row 14) ---
+  - id: insurance_certificates
+    label: "Insurance certificates (life, liability, accident, pension, health, nursing)"
+    group: insurance
+    multi_instance: true
+    instance_scope: all
+  - id: riester_s92_cert
+    label: "Riester §92 annual certificate"
+    group: insurance
+    multi_instance: false
+    instance_scope: all
+  - id: ruerup_s10_confirmation
+    label: "Rürup §10 confirmation"
+    group: insurance
+    multi_instance: false
+    instance_scope: all
+
+  # --- Tax-advice fees (row 15) ---
+  - id: tax_advice_receipts
+    label: "Receipts for tax consultancy / assistance-association fees"
+    group: special_expenses
+    multi_instance: true
+    instance_scope: all
+
+  # --- Donations (row 16) ---
+  - id: donation_receipts
+    label: "Donation receipts"
+    group: special_expenses
+    multi_instance: true
+    instance_scope: all
+
+  # --- Disability (row 17) ---
+  - id: disability_notice
+    label: "Disability notice / ID card from the pension office"
+    group: special_situations
+    multi_instance: true
+    instance_scope: all
+
+  # --- Childcare (row 18) ---
+  - id: childcare_invoice
+    label: "Childcare invoice (excl. meals/play allowance) + payment/transfer proof"
+    group: childcare
+    multi_instance: true
+    instance_scope: all
+
+  # --- Extraordinary burdens (row 19 — nested/stubbed) ---
+  - id: medical_receipts
+    label: "Medical receipts + health-insurance subsidy proof"
+    group: extraordinary_burdens
+    multi_instance: true
+    instance_scope: all
+  - id: divorce_legal_costs
+    label: "Divorce lawyer + court costs"
+    group: extraordinary_burdens
+    multi_instance: true
+    instance_scope: all
+  - id: funeral_costs
+    label: "Funeral costs exceeding the estate"
+    group: extraordinary_burdens
+    multi_instance: false
+    instance_scope: all
+
+  # --- Household services / craftsmen §35a (row 20) ---
+  - id: craftsmen_invoices
+    label: "Craftsmen invoices + payment proof (bank statement)"
+    group: household_services
+    multi_instance: true
+    instance_scope: all
+  - id: operating_cost_statements
+    label: "Operating-cost statements (if applicable)"
+    group: household_services
+    multi_instance: true
+    instance_scope: all

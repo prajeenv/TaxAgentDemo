@@ -1,0 +1,24 @@
+[project]
+name = "tax-intake-backend"
+version = "0.1.0"
+description = "Prototype conversational tax-intake agent — logic core + API"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "openai>=1.30",      # DeepSeek is OpenAI-SDK compatible
+    "anthropic>=0.40",   # Claude Sonnet 5 fallback provider
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
