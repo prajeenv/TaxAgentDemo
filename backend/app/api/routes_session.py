@@ -1,21 +1,20 @@
-"""Session + review endpoints.
+"""Session + review + chat endpoints.
 
-Phase 1 wires everything that does NOT need the LLM: creating a session, reading
-its snapshot, the consultant editing a profile field (which re-runs the engine),
-and approval. The chat endpoint (POST /session/{id}/message) is added in Phase 3
-with the conversation runner.
+Everything the frontend talks to: create a session, read its snapshot, the chat
+turn (POST /message, via the conversation runner), the consultant editing a profile
+field (which re-runs the engine), and approval.
 """
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.config import FIRM, get_ruleset
-from app.determination.engine import determine
-from app.determination.models import DeterminationResult, Profile
+from app.config import FIRM
+from app.determination.models import Profile
+from app.session_engine import TrackerState, run_engine, tracker_from_result
 from app.store.memory_store import ChatMessage, SessionState, store
 
 router = APIRouter()
@@ -30,32 +29,8 @@ OPENING_QUESTION = (
 )
 
 
-class TrackerState(BaseModel):
-    """The engine result, shaped for the frontend tracker + review surface."""
-
-    required: list[dict[str, Any]]
-    excluded: list[dict[str, Any]]
-    pending: list[dict[str, Any]]
-    refine_flags: list[dict[str, Any]]
-
-
-def tracker_from_result(result: Optional[DeterminationResult]) -> TrackerState:
-    if result is None:
-        return TrackerState(required=[], excluded=[], pending=[], refine_flags=[])
-    return TrackerState(
-        required=[d.model_dump() for d in result.required_documents],
-        excluded=[t.model_dump() for t in result.excluded],
-        pending=[t.model_dump() for t in result.pending],
-        refine_flags=[f.model_dump() for f in result.refine_flags],
-    )
-
-
-def run_engine(state: SessionState) -> DeterminationResult:
-    """Run the determination engine on a session's current profile and store it."""
-    ruleset = get_ruleset(state.firm)
-    result = determine(state.profile, ruleset)
-    state.latest_determination = result
-    return result
+# TrackerState / tracker_from_result / run_engine live in app.session_engine
+# (shared with the conversation runner to avoid a circular import).
 
 
 # --- Responses --------------------------------------------------------------
@@ -112,6 +87,36 @@ def get_session(session_id: str) -> SessionSnapshot:
     if state is None:
         raise HTTPException(status_code=404, detail="session not found")
     return snapshot(state)
+
+
+class MessageRequest(BaseModel):
+    text: str
+
+
+class MessageResponse(BaseModel):
+    reply_text: str
+    tracker_state: TrackerState
+    escalated: bool
+    complete: bool
+    checkpoint: bool
+
+
+@router.post("/session/{session_id}/message", response_model=MessageResponse)
+def post_message(session_id: str, req: MessageRequest) -> MessageResponse:
+    """The chat endpoint: run one intake turn through the conversation runner.
+
+    The runner extracts facts, enforces the reserved-advice guardrail, re-runs the
+    engine, and returns the turn result. Imported lazily so the LLM/runner deps
+    aren't required for the non-chat endpoints.
+    """
+    state = store.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    from app.conversation.runner import run_turn
+
+    result = run_turn(state, req.text)
+    return MessageResponse(**result)
 
 
 class ProfilePatch(BaseModel):
