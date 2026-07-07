@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply bg-paper text-ink;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  /* German-Kanzlei component primitives (design spec §3.4). */
+  .k-card {
+    @apply rounded-md border border-line bg-surface;
+  }
+  .k-section-header {
+    @apply flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-ink-2;
+  }
+  .k-count {
+    @apply ml-2 rounded-full bg-brand-tint px-2 py-0.5 text-xs tabular-nums text-brand;
+  }
+  .k-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line px-1.5 py-0.5 text-[11px] text-ink-2;
+  }
+  .k-btn-primary {
+    @apply rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-40;
+  }
+}
