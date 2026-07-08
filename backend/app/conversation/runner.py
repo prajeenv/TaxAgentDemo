@@ -23,6 +23,7 @@ carries no facts, so the engine result is unchanged.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Optional
 
@@ -38,6 +39,8 @@ from app.conversation.prompts import (
 from app.conversation.turn_schema import TurnOutput
 from app.determination.models import Profile
 from app.store.memory_store import ChatMessage, SessionState
+
+logger = logging.getLogger(__name__)
 
 RESERVED_CATEGORIES = {"tax_advice", "outcome_speculation", "out_of_scope"}
 _VALID_PROFILE_FIELDS = set(Profile.model_fields.keys())
@@ -171,7 +174,11 @@ def run_turn(state: SessionState, user_message: str) -> dict:
     # reserved-advice breach, just a data-quality re-ask.
 
     # 4. Merge extracted facts (fill-only; overwrite only on a checkpoint correction).
-    _merge_profile(state, turn)
+    dropped = _merge_profile(state, turn)
+    if dropped:
+        # Field-name drift the alias map couldn't resolve — visible in the server log
+        # so we can add an alias or tighten the prompt if a new pattern shows up.
+        logger.warning("dropped unknown profile field(s): %s", dropped)
 
     # 5. Re-run the engine on the merged profile (the seam).
     result = run_engine(state)
@@ -211,22 +218,54 @@ def run_turn(state: SessionState, user_message: str) -> dict:
 # --- Helpers ----------------------------------------------------------------
 
 
-def _merge_profile(state: SessionState, turn: TurnOutput) -> None:
+# Deterministic aliases for field names the model has been observed to invent
+# (the prompt now spells the exact names out, so this is a belt-and-suspenders net,
+# not the primary defence). Each alias maps a wrong-but-unambiguous name to the real
+# field. Only add entries where the intent is unmistakable — never guess.
+_FIELD_ALIASES: dict[str, str] = {
+    "tax_year": "tax_years",
+    "employed_full_year": "employed_whole_year",
+    "employed_the_whole_year": "employed_whole_year",
+    "investment_income_above_allowance": "investment_income",
+    "capital_income": "investment_income",
+    "has_children": "children",
+    "receives_a_pension": "receives_pension",
+}
+
+
+def _canonical_field(name: str) -> Optional[str]:
+    """Return the valid profile field for a model-supplied key, or None if unknown."""
+    if name in _VALID_PROFILE_FIELDS:
+        return name
+    return _FIELD_ALIASES.get(name)
+
+
+def _merge_profile(state: SessionState, turn: TurnOutput) -> list[str]:
     """Merge extracted facts. Fill-only unless this is a checkpoint correction turn.
 
-    Unknown field names are dropped (logged via a no-op here; the runner is the
-    place a real logger would hook in). Invalid values that fail Profile validation
-    are dropped by re-validating the whole profile and reverting on error.
+    Field names are canonicalized (exact match, then a small alias map). Names that
+    still don't resolve are dropped and RETURNED so the caller can log the drift.
+    A `tax_year` scalar is coerced to the `tax_years` list. Invalid values that fail
+    Profile validation are dropped by re-validating and reverting on error.
     """
     updates = turn.profile_update.field_updates
     if not updates:
-        return
+        return []
 
+    dropped: list[str] = []
     current = state.profile.model_dump()
-    for field, value in updates.items():
-        if field not in _VALID_PROFILE_FIELDS:
-            continue  # drop unknown field (would-be log point)
-        already_set = current.get(field) is not None
+    for raw_field, value in updates.items():
+        field = _canonical_field(raw_field)
+        if field is None:
+            dropped.append(raw_field)
+            continue
+        # A scalar year -> the tax_years list.
+        if field == "tax_years" and not isinstance(value, list):
+            value = [value]
+        # "set" means a real value, not a default empty collection (tax_years and
+        # children default to [] — treat empty as unset so the first value fills).
+        existing = current.get(field)
+        already_set = existing is not None and existing != [] and existing != {}
         if already_set and not turn.checkpoint:
             continue  # fill-only: don't overwrite a set field outside a checkpoint
         current[field] = value
@@ -236,6 +275,7 @@ def _merge_profile(state: SessionState, turn: TurnOutput) -> None:
     except Exception:
         # A bad value slipped through; keep the prior profile rather than crash.
         pass
+    return dropped
 
 
 def _next_server_question(state: SessionState) -> Optional[str]:

@@ -149,10 +149,45 @@ You conduct the intake interview conversationally, in the client's language
   by EMAIL, and that you cannot speak to tax outcomes — that's for {CONSULTANT_NAME}."""
 
 
+def _rule_field(rule) -> str | None:
+    """The profile field a rule reads (from its top-level applies_when predicate)."""
+    pred = rule.applies_when
+    if pred is None:
+        return None
+    if pred.field is not None:
+        return pred.field
+    # any_of/all_of: use the first leaf field as the representative (rare in this set)
+    for sub in (pred.any_of or []) + (pred.all_of or []):
+        if sub.field is not None:
+            return sub.field
+    return None
+
+
 def _interview_script(ruleset: Ruleset) -> str:
-    lines = ["## INTAKE CONDITIONS (the script — ask in order, skip answered)"]
+    lines = [
+        "## INTAKE CONDITIONS (the script — ask in order, skip answered)",
+        "Each line is:  [rule id] condition — question — [SET FIELD: <exact profile field>]",
+        "When the client's answer establishes a condition, put that EXACT field name in",
+        "profile_update.field_updates with the value they gave (true / false / a string).",
+        "Use ONLY these field names — do not invent or paraphrase them.",
+        "",
+    ]
     for rule in ruleset.rules:
-        lines.append(f"- [{rule.id}] {rule.condition_label}: \"{rule.triggering_question}\"")
+        field = _rule_field(rule)
+        # employed_whole_year is set FALSE to trigger r9; note the polarity for clarity.
+        note = ""
+        if rule.id == "r9_not_employed_whole_year":
+            note = "  (set employed_whole_year=false if there were gaps, true if employed all year)"
+        lines.append(
+            f'- [{rule.id}] {rule.condition_label}: "{rule.triggering_question}"'
+            f"  [SET FIELD: {field}]{note}"
+        )
+    # The baseline fields that aren't 1:1 with a conditional rule.
+    lines.append("")
+    lines.append("Baseline fields to also capture when volunteered:")
+    lines.append("- tax year(s) -> [SET FIELD: tax_years] (a LIST of integers, e.g. [2024])")
+    lines.append("- marital status -> [SET FIELD: marital_status] (one of: single, married, divorced, widowed, separated)")
+    lines.append("- children -> [SET FIELD: children] (a list; each child an object)")
     return "\n".join(lines)
 
 
