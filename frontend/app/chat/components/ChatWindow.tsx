@@ -72,8 +72,19 @@ export function ChatWindow() {
       ]);
       setTracker(r.tracker_state);
       setComplete(r.complete);
-    } catch (e) {
-      setError(String(e));
+    } catch {
+      // Network/backend hiccup — show a warm, recoverable message as an agent turn
+      // and put the client's text back so they can simply resend.
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: "Entschuldigung — da ist die Verbindung kurz abgerissen. Könnten Sie das bitte noch einmal senden?",
+          checkpoint: false,
+          escalated: false,
+        },
+      ]);
+      setInput(text);
     } finally {
       setSending(false);
     }

@@ -70,7 +70,15 @@ def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
     except ImportError as exc:  # pragma: no cover
         raise LLMError(f"openai SDK not installed: {exc}")
 
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+    # The OpenAI SDK retries transient failures (connection resets, timeouts, 429,
+    # 5xx) with backoff on its own — max_retries handles the WinError-10054-style
+    # dropped-socket case we saw in the wild. A 60s timeout bounds a hung turn.
+    client = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url=DEEPSEEK_BASE_URL,
+        max_retries=3,
+        timeout=60.0,
+    )
     convo = [{"role": "system", "content": system}, *messages]
 
     def call(extra_note: Optional[str] = None) -> str:
@@ -84,7 +92,14 @@ def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
         return resp.choices[0].message.content or ""
 
     # First attempt, then one schema-validated retry with the error appended.
-    raw = call()
+    # Any provider/transport error (post-SDK-retries) becomes an LLMError so the
+    # runner's safe-fallback path catches it instead of a raw 500 reaching the client.
+    try:
+        raw = call()
+    except LLMError:
+        raise
+    except Exception as exc:
+        raise LLMError(f"DeepSeek request failed: {type(exc).__name__}: {exc}")
     parsed = _try_parse(raw)
     if parsed is not None:
         return parsed
@@ -93,7 +108,10 @@ def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
         "required schema. Respond again with ONLY the JSON object, no prose, no "
         "markdown fences, all required keys present."
     )
-    raw2 = call(retry_note)
+    try:
+        raw2 = call(retry_note)
+    except Exception as exc:
+        raise LLMError(f"DeepSeek request failed on retry: {type(exc).__name__}: {exc}")
     parsed2 = _try_parse(raw2)
     if parsed2 is not None:
         return parsed2
@@ -139,16 +157,20 @@ def _complete_anthropic(system: str, messages: list[Message]) -> TurnOutput:
     except ImportError as exc:  # pragma: no cover
         raise LLMError(f"anthropic SDK not installed: {exc}")
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    resp = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=1500,
-        thinking={"type": "disabled"},  # chat latency; extraction needs no deep reasoning
-        system=system,
-        messages=messages,
-        tools=[_EMIT_TURN_TOOL],
-        tool_choice={"type": "tool", "name": "emit_turn"},
-    )
+    # The anthropic SDK retries transient failures on its own (default 2); bump it.
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, max_retries=3, timeout=60.0)
+    try:
+        resp = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=1500,
+            thinking={"type": "disabled"},  # chat latency; extraction needs no deep reasoning
+            system=system,
+            messages=messages,
+            tools=[_EMIT_TURN_TOOL],
+            tool_choice={"type": "tool", "name": "emit_turn"},
+        )
+    except Exception as exc:
+        raise LLMError(f"Anthropic request failed: {type(exc).__name__}: {exc}")
     for block in resp.content:
         if getattr(block, "type", None) == "tool_use" and block.name == "emit_turn":
             try:

@@ -125,10 +125,16 @@ def run_turn(state: SessionState, user_message: str) -> dict:
         {"role": m.role, "content": m.text} for m in state.messages[:-1]
     ]
 
-    # 1-2. Call the model; on any failure, a safe canned turn.
+    # 1-2. Call the model; on ANY failure, a safe canned turn (never a 500 to the
+    #      client). LLMError is the expected path; the bare except is belt-and-
+    #      suspenders so an unforeseen error still degrades gracefully. The backstop
+    #      below still runs on the fallback turn, so a reserved-advice question is
+    #      caught even when the model call failed entirely.
     try:
         turn = complete_turn(system, history, user_message)
     except LLMError:
+        turn = TurnOutput(reply_text=SAFE_FALLBACK_REPLY)
+    except Exception:
         turn = TurnOutput(reply_text=SAFE_FALLBACK_REPLY)
 
     # 3. Deterministic backstop: if a reserved pattern fires but the model didn't
