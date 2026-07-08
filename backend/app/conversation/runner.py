@@ -194,8 +194,22 @@ def run_turn(state: SessionState, user_message: str) -> dict:
             )
         )
 
+    # The conversation is only truly complete when the engine reports NO pending
+    # document conditions. The model sometimes declares completion early (it "feels
+    # done" before walking the last one or two conditions), leaving them stuck in
+    # "still to clarify". Gate on the engine's ground truth, not the model's claim.
     if turn.conversation_complete:
-        state.complete = True
+        if result.pending:
+            # Premature: the model tried to wrap up with conditions still unasked.
+            # Suppress the (closing-flavoured) reply and ask the next pending
+            # condition instead, so the conversation doesn't dead-end. (Not on a
+            # reserved-advice turn — that reply is already server-authored.)
+            if not (escalated and turn.escalation.category in RESERVED_CATEGORIES):
+                next_q = _next_server_question(state)
+                if next_q:
+                    reply = f"Fast geschafft — nur noch eine Frage: {next_q}"
+        else:
+            state.complete = True
 
     state.messages.append(
         ChatMessage(
