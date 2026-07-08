@@ -24,6 +24,7 @@ export const FIELD_META: FieldMeta[] = [
   { key: "tax_years", label: "Steuerjahre", control: "taxyears", group: "Grunddaten" },
   { key: "employed_this_year", label: "Angestellt im Jahr", control: "tristate", group: "Grunddaten" },
   { key: "employed_whole_year", label: "Ganzjährig angestellt", control: "tristate", group: "Grunddaten" },
+  { key: "received_wage_replacement", label: "Lohnersatzleistungen erhalten", control: "tristate", group: "Grunddaten" },
   { key: "marital_status", label: "Familienstand", control: "marital", group: "Grunddaten" },
   { key: "marital_status_changed", label: "Familienstand geändert", control: "tristate", group: "Grunddaten" },
   { key: "spouse_employed", label: "Ehepartner berufstätig", control: "tristate", group: "Grunddaten" },

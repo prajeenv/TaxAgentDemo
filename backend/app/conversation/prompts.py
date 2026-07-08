@@ -170,8 +170,7 @@ that the client hasn't already given, ONE at a time, in this order:
 4. **Employment** — were they employed during the year, and for the WHOLE year?
    [SET FIELD: employed_this_year, employed_whole_year]
    - If NOT employed the whole year, ask whether they received employment/state
-     benefits (Elterngeld, Arbeitslosengeld, Krankengeld, etc.) — this feeds the
-     non-employment-period condition later.
+     benefits (Elterngeld, Arbeitslosengeld, Krankengeld, etc.). [SET FIELD: received_wage_replacement]
 
 ### TRANSITION (REQUIRED — do this exactly once, when the foundation is complete)
 

@@ -43,6 +43,11 @@ class Profile(BaseModel):
     # consultant's professional judgment, wired into her real ruleset later.
     spouse_employed: Optional[bool] = None               # if married: was the spouse working?
     filing_jointly: Optional[bool] = None                # joint (Zusammenveranlagung) vs separate
+    # If not employed the whole year: did they receive wage-replacement / state
+    # benefits (Elterngeld, Arbeitslosengeld, Krankengeld...). Captured detail under
+    # the r9 non-employment stub; the stub already emits wage_replacement_proof, so
+    # this refines context for the consultant rather than gating a new document.
+    received_wage_replacement: Optional[bool] = None
 
     # --- Condition flags (rows 2-20; rows 1/9/6 covered by baseline fields) ---
     receives_pension: Optional[bool] = None              # r2

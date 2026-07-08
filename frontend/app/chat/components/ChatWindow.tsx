@@ -131,6 +131,12 @@ export function ChatWindow() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={!sessionId || complete}
+              // Preserve the client's exact words — browser autocorrect was silently
+              // rewriting input (e.g. "nope" -> "no", a typo -> a wrong real word).
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              autoComplete="off"
             />
             <button
               type="submit"
