@@ -38,6 +38,11 @@ class Profile(BaseModel):
     marital_status: Optional[MaritalStatus] = None
     marital_status_changed: Optional[bool] = None        # True  -> r6 branch
     children: list[Child] = Field(default_factory=list)
+    # Captured in the pre-intake phase for the consultant's benefit. NO rule consumes
+    # these yet — inventing document rules for spouse income / joint filing is the
+    # consultant's professional judgment, wired into her real ruleset later.
+    spouse_employed: Optional[bool] = None               # if married: was the spouse working?
+    filing_jointly: Optional[bool] = None                # joint (Zusammenveranlagung) vs separate
 
     # --- Condition flags (rows 2-20; rows 1/9/6 covered by baseline fields) ---
     receives_pension: Optional[bool] = None              # r2

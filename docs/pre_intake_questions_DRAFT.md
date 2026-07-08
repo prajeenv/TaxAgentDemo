@@ -1,4 +1,17 @@
-# Pre-Intake Clarifying Questions — DRAFT for your review
+# Pre-Intake Clarifying Questions — IMPLEMENTED
+
+> **Status: implemented** per the decisions below. The agent now runs a Phase-1
+> FOUNDATION (tax year first, marital status + change, spouse-working & joint-filing
+> if married, children, employment + benefits-if-partial-year), announces a
+> TRANSITION signpost, then runs Phase-2 (the 20 document conditions). New fields
+> `spouse_employed` and `filing_jointly` are captured (no document rule consumes them
+> yet — that's the consultant's real ruleset later). Residency and client-name were
+> dropped per your notes. See app/conversation/prompts.py (ROLE_AND_FLOW).
+
+---
+
+## Original DRAFT + your comments (kept for the record)
+
 
 > **Point 1 from your feedback.** Before the agent walks the 20 conditions, it should
 > establish a short set of **foundational facts**. Getting these right first prevents
@@ -29,14 +42,19 @@ missing after the opener must be explicitly asked before the 20 conditions begin
 |---|----------|----------------------|----------------------|
 | 1 | **Which tax year** is this return for? | Poisons everything if wrong. Must be explicit — never assumed. | `tax_years` |
 | 2 | **Marital status**, and did it **change** during that year? | Branches the spousal / joint-vs-separate logic and the r6 marital-change condition. | `marital_status`, `marital_status_changed` |
+Just adding for more clarity 
+-- If marital status was already mentioned, acknowledge that.
+-- If your spouse also working during the tax year?
+-- Is this a joint or a separate tax return filing?
 | 3 | Do you have **children**? (how many, ages) | Gates childcare, child-over-18-education, and family allowances. | `children` |
 | 4 | Were you **employed** during the year, and for the **whole** year? | The baseline that most work-related conditions hang off. | `employed_this_year`, `employed_whole_year` |
+-- if not employed for full year, I think we can ask if he/she was getting employment benefit
 
 ### Candidates you might want to add (your call)
-- **Filing jointly or separately** (if married) — affects which documents/spouse data are needed. *(Not currently a profile field — would need adding if you want it.)*
-- **Residency / did you live in Germany the whole year** — relevant for some income sources and the changing-workplaces/abroad condition. *(Not a field yet.)*
-- **Do you (or spouse) receive any state benefits** (Elterngeld, Arbeitslosengeld, etc.) — ties to the non-employment-period condition.
-- **Confirm the client's name / who the return is for** — a real intake would capture this; the prototype currently doesn't (no PII by design).
+- **Filing jointly or separately** (if married) — affects which documents/spouse data are needed. *(Not currently a profile field — would need adding if you want it.)* -- This is needed, I updated it above
+- **Residency / did you live in Germany the whole year** — relevant for some income sources and the changing-workplaces/abroad condition. *(Not a field yet.)* -- let us drop this for the prototype. 
+- **Do you (or spouse) receive any state benefits** (Elterngeld, Arbeitslosengeld, etc.) — ties to the non-employment-period condition. -- This is required, I updatedit above
+- **Confirm the client's name / who the return is for** — a real intake would capture this; the prototype currently doesn't (no PII by design). -- I think this will come as part of the documents. No need of collecting it in the chat
 
 ---
 
@@ -58,3 +76,8 @@ missing after the opener must be explicitly asked before the 20 conditions begin
 - Do you want "filing jointly vs separately" and "residency" added as real fields, or
   are they out of scope for the prototype's proxy ruleset?
 - Anything a Steuerberaterin always establishes up front that I've missed?
+
+Update from me--
+I think you have covered most of the area.
+At least this is enough for the prototype.
+On important note -> Once these preliminery questions are over, Agent needs to communicate clearly that it is diving into the questionaire so that we can verify each of the documents required. As of now, Agent simply jump into the questions

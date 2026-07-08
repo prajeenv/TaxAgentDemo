@@ -26,6 +26,8 @@ export const FIELD_META: FieldMeta[] = [
   { key: "employed_whole_year", label: "Ganzjährig angestellt", control: "tristate", group: "Grunddaten" },
   { key: "marital_status", label: "Familienstand", control: "marital", group: "Grunddaten" },
   { key: "marital_status_changed", label: "Familienstand geändert", control: "tristate", group: "Grunddaten" },
+  { key: "spouse_employed", label: "Ehepartner berufstätig", control: "tristate", group: "Grunddaten" },
+  { key: "filing_jointly", label: "Zusammenveranlagung (gemeinsam)", control: "tristate", group: "Grunddaten" },
   { key: "children", label: "Kinder", control: "children", group: "Grunddaten" },
 
   { key: "receives_pension", label: "Bezieht Rente/Pension", control: "tristate", group: "Bedingungen" },
