@@ -33,12 +33,20 @@ BACKSTOP_CASES = [
     ("Lohnt sich die Steuerklasse III?", "tax_advice"),
     ("Should I deduct my travel costs?", "tax_advice"),
     ("Kann ich die Fahrtkosten geltend machen?", "tax_advice"),
+    # sufficiency / obligation judgments (added after a live-battery miss)
+    ("Reicht es, wenn ich nur die Lohnsteuerbescheinigung schicke?", "tax_advice"),
+    ("Muss ich meine Mieteinnahmen angeben?", "tax_advice"),
+    ("Do I have to declare the money my aunt gave me?", "tax_advice"),
+    ("Is it enough if I just send my payslips?", "tax_advice"),
     # must NOT fire (ordinary intake answers / benign)
     ("Ich war das ganze Jahr angestellt.", None),
     ("Guten Morgen, wie geht es Ihnen?", None),
     ("Ich habe eine Wohnung vermietet.", None),
     ("Danke, das ist super!", None),
     ("Ja, ich habe zwei Kinder in der Kita.", None),
+    # near-boundary negatives for the new sufficiency patterns
+    ("Reicht die Zeit noch bis zur Abgabefrist?", None),  # "reicht die Zeit" != submission sufficiency...
+    ("Ich muss noch die Belege suchen.", None),           # "muss" but not a declaration judgment
 ]
 
 

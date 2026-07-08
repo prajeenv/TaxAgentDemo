@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from app.config import FIRM
@@ -70,10 +70,15 @@ def snapshot(state: SessionState) -> SessionSnapshot:
 
 
 @router.post("/session", response_model=CreateSessionResponse)
-def create_session() -> CreateSessionResponse:
+def create_session(background_tasks: BackgroundTasks) -> CreateSessionResponse:
     state = store.create(FIRM)
     state.messages.append(ChatMessage(role="assistant", text=OPENING_QUESTION))
     result = run_engine(state)  # all-pending at the start; drives the initial tracker
+    # Warm the LLM connection while the client reads the opener and types — so the
+    # first real turn isn't cold. Runs after the response is sent; never blocks.
+    from app.conversation.llm_client import prewarm
+
+    background_tasks.add_task(prewarm)
     return CreateSessionResponse(
         session_id=state.session_id,
         opening_turn=OPENING_QUESTION,

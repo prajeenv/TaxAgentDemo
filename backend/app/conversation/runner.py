@@ -62,6 +62,13 @@ _BACKSTOP_PATTERNS: list[tuple[str, str]] = [
     (r"(absetzen|abzugsf\w+|absetzbar|abziehen|geltend\s*machen|steuerklasse)", "tax_advice"),
     (r"\b(deduct|deductible|tax\s+class)\b", "tax_advice"),
     (r"should\s*i\s*(file|claim|deduct)", "tax_advice"),
+    # sufficiency / obligation judgments — "is it enough if…", "do I have to declare…"
+    # (a judgment about what satisfies their return). Scoped to submission/declaration
+    # phrasing so it doesn't fire on "reicht die Zeit?" etc.
+    (r"(reicht\s*es|genügt\s*es|reicht\s*die|ist\s*das\s*genug).{0,70}(schick|einreich|abgeb|angeb|erkl)", "tax_advice"),
+    (r"(muss\s*ich).{0,50}(angeb|deklar|erklär|versteuern)", "tax_advice"),
+    (r"(do\s*i\s*(have\s*to|need\s*to)\s*(declare|report|include))", "tax_advice"),
+    (r"(is\s*it\s*enough|is\s*that\s*enough|do\s*i\s*only\s*need)", "tax_advice"),
 ]
 
 _COMPILED_BACKSTOP = [(re.compile(p, re.IGNORECASE), cat) for p, cat in _BACKSTOP_PATTERNS]
@@ -150,13 +157,18 @@ def run_turn(state: SessionState, user_message: str) -> dict:
                 "did not self-report."
             )
 
-    # 3b. Layer-3 containment: suppress model prose for reserved categories.
+    # 3b. Layer-3 containment: suppress ALL model prose for reserved categories.
+    #     The entire visible reply is server-authored — the canned handoff plus a
+    #     next question sourced deterministically from the interview script, never
+    #     from the model's reply_text (which could carry advice-adjacent prose).
     reply = turn.reply_text
     escalated = turn.escalation.triggered
     if escalated and turn.escalation.category in RESERVED_CATEGORIES:
-        # Try to preserve a fact-question the model may have appended, else no tail.
-        reply = render_handoff(turn.escalation.category or "", _next_question(turn))
-    # unmapped_answer keeps the model's gentle re-ask (turn.reply_text).
+        reply = render_handoff(
+            turn.escalation.category or "", _next_server_question(state)
+        )
+    # unmapped_answer keeps the model's gentle re-ask (turn.reply_text) — it is not a
+    # reserved-advice breach, just a data-quality re-ask.
 
     # 4. Merge extracted facts (fill-only; overwrite only on a checkpoint correction).
     _merge_profile(state, turn)
@@ -226,15 +238,25 @@ def _merge_profile(state: SessionState, turn: TurnOutput) -> None:
         pass
 
 
-def _next_question(turn: TurnOutput) -> Optional[str]:
-    """Best-effort extraction of a trailing question from the model's reply, so a
-    forced handoff can still carry the conversation forward. Conservative: only use
-    the model's reply tail if it ends in a question."""
-    text = (turn.reply_text or "").strip()
-    if text.endswith("?"):
-        # take the last sentence-ish fragment ending in '?'
-        parts = re.split(r"(?<=[.!?])\s+", text)
-        for frag in reversed(parts):
-            if frag.strip().endswith("?"):
-                return frag.strip()
+def _next_server_question(state: SessionState) -> Optional[str]:
+    """The next intake question to append to a forced handoff — SERVER-AUTHORED.
+
+    On a reserved-advice turn the entire visible reply must be authored by us, never
+    by the model (the model may have written advice-adjacent prose, and this is
+    exactly the turn type the guardrail exists to contain). So we source the
+    continuation deterministically from the interview script: the triggering question
+    of the first still-pending condition, taken verbatim from the ruleset. If nothing
+    is pending, return None (the handoff stands alone).
+    """
+    ruleset = get_ruleset(state.firm)
+    result = state.latest_determination
+    if result is None:
+        return None
+    pending_ids = {t.rule_id for t in result.pending}
+    for rule in ruleset.rules:
+        if rule.id in pending_ids:
+            # Fill the {tax_year} placeholder if present, else leave the template.
+            years = state.profile.tax_years
+            year = str(years[0]) if years else "dem betreffenden Jahr"
+            return rule.triggering_question.replace("{tax_year}", year)
     return None

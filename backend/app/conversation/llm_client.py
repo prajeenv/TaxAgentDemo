@@ -37,6 +37,25 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 Message = dict[str, str]  # {"role": "user"|"assistant", "content": str}
 
+# Latency / reliability tuning (measured against deepseek-v4-flash):
+#  - deepseek-v4-flash reasons before emitting the JSON, and that reasoning is
+#    VARIABLE (400-1400 output tokens/turn). max_tokens must sit ABOVE the worst
+#    case or the JSON gets truncated (finish_reason=length) and the retry fires —
+#    at 800 we measured ~50% truncation failures, which is slower AND unreliable.
+#    2000 gives 8/8 valid JSON with headroom.
+#  - low temperature makes JSON structure more reliable (fewer retries).
+#  - reasoning_effort=low (set on the call) trims reasoning where the model will
+#    let it; net latency is ~6-12s/turn — the model's generation is the real cost,
+#    not prefill, so perceived-latency UX (staged typing status) matters most.
+_MAX_TOKENS = 2000
+_TEMPERATURE = 0.2
+
+# Module-scoped clients (created once, reused). Reusing the client keeps the TCP+TLS
+# connection pool warm across turns instead of re-handshaking to the API every turn
+# (~0.3-0.8s/turn saved). Lazily built so importing this module never requires a key.
+_deepseek_client = None
+_anthropic_client = None
+
 
 class LLMError(Exception):
     """Raised when a provider fails or returns unparseable output after retry."""
@@ -59,26 +78,61 @@ def complete_turn(
     return _complete_deepseek(system, messages)
 
 
+def prewarm() -> None:
+    """Fire a tiny throwaway call to open the TLS connection + prime the model path,
+    so the first REAL turn isn't cold (~10s -> ~6-7s). Called fire-and-forget on
+    session creation. Never raises — a warmup failure must never affect a session.
+    It sends no user content and no system prompt, so it has zero guardrail surface.
+    """
+    try:
+        if PROVIDER == "anthropic":
+            client = _get_anthropic_client()
+            client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=1,
+                thinking={"type": "disabled"},
+                messages=[{"role": "user", "content": "ping"}],
+            )
+        else:
+            client = _get_deepseek_client()
+            client.chat.completions.create(
+                model=DEEPSEEK_MODEL,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+            )
+    except Exception:
+        pass  # warmup is best-effort; a failure is silently ignored
+
+
 # --- DeepSeek (JSON mode) ---------------------------------------------------
 
 
-def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
-    if not DEEPSEEK_API_KEY:
-        raise LLMError("DEEPSEEK_API_KEY not set")
-    try:
-        from openai import OpenAI
-    except ImportError as exc:  # pragma: no cover
-        raise LLMError(f"openai SDK not installed: {exc}")
+def _get_deepseek_client():
+    """Lazily build and cache the DeepSeek client (reused across turns for keep-alive).
 
-    # The OpenAI SDK retries transient failures (connection resets, timeouts, 429,
-    # 5xx) with backoff on its own — max_retries handles the WinError-10054-style
-    # dropped-socket case we saw in the wild. A 60s timeout bounds a hung turn.
-    client = OpenAI(
-        api_key=DEEPSEEK_API_KEY,
-        base_url=DEEPSEEK_BASE_URL,
-        max_retries=3,
-        timeout=60.0,
-    )
+    The OpenAI SDK retries transient failures (connection resets, timeouts, 429, 5xx)
+    with backoff on its own — max_retries handles the WinError-10054-style dropped
+    socket we saw in the wild. A 60s timeout bounds a hung turn.
+    """
+    global _deepseek_client
+    if _deepseek_client is None:
+        if not DEEPSEEK_API_KEY:
+            raise LLMError("DEEPSEEK_API_KEY not set")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:  # pragma: no cover
+            raise LLMError(f"openai SDK not installed: {exc}")
+        _deepseek_client = OpenAI(
+            api_key=DEEPSEEK_API_KEY,
+            base_url=DEEPSEEK_BASE_URL,
+            max_retries=3,
+            timeout=60.0,
+        )
+    return _deepseek_client
+
+
+def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
+    client = _get_deepseek_client()
     convo = [{"role": "system", "content": system}, *messages]
 
     def call(extra_note: Optional[str] = None) -> str:
@@ -87,7 +141,16 @@ def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
             model=DEEPSEEK_MODEL,
             messages=msgs,
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=_TEMPERATURE,
+            max_tokens=_MAX_TOKENS,
+            # reasoning_effort=low was the single biggest latency win: on this
+            # structured fact-extraction task deepseek-v4-flash otherwise burns
+            # ~600 tokens on internal reasoning it doesn't need (turns ran ~11s at
+            # the max_tokens cap). "low" makes it decisive (~3s). The guardrail is
+            # re-validated on this setting (test_guardrail_llm.py) — the reserved-
+            # advice boundary is instruction-following, not deep reasoning, so it
+            # holds. Passed via extra_body since the openai SDK types don't include it.
+            extra_body={"reasoning_effort": "low"},
         )
         return resp.choices[0].message.content or ""
 
@@ -149,16 +212,24 @@ _EMIT_TURN_TOOL = {
 }
 
 
-def _complete_anthropic(system: str, messages: list[Message]) -> TurnOutput:
-    if not ANTHROPIC_API_KEY:
-        raise LLMError("ANTHROPIC_API_KEY not set")
-    try:
-        import anthropic
-    except ImportError as exc:  # pragma: no cover
-        raise LLMError(f"anthropic SDK not installed: {exc}")
+def _get_anthropic_client():
+    """Lazily build and cache the Anthropic client (reused across turns)."""
+    global _anthropic_client
+    if _anthropic_client is None:
+        if not ANTHROPIC_API_KEY:
+            raise LLMError("ANTHROPIC_API_KEY not set")
+        try:
+            import anthropic
+        except ImportError as exc:  # pragma: no cover
+            raise LLMError(f"anthropic SDK not installed: {exc}")
+        _anthropic_client = anthropic.Anthropic(
+            api_key=ANTHROPIC_API_KEY, max_retries=3, timeout=60.0
+        )
+    return _anthropic_client
 
-    # The anthropic SDK retries transient failures on its own (default 2); bump it.
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, max_retries=3, timeout=60.0)
+
+def _complete_anthropic(system: str, messages: list[Message]) -> TurnOutput:
+    client = _get_anthropic_client()
     try:
         resp = client.messages.create(
             model=ANTHROPIC_MODEL,

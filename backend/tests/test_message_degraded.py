@@ -55,3 +55,40 @@ def test_benign_message_does_not_escalate_without_llm(client):
     r = client.post(f"/session/{sid}/message", json={"text": "Guten Morgen!"}).json()
     assert r["escalated"] is False
     assert client.get(f"/session/{sid}").json()["escalation_log"] == []
+
+
+def test_reserved_turn_reply_is_fully_server_authored(monkeypatch):
+    """On a reserved turn, NO model prose reaches the client — even a question the
+    model appended. The whole visible reply is the canned handoff + a next question
+    sourced from the interview script. Regression guard for the _next_question leak.
+    """
+    from app.conversation.turn_schema import EscalationSignal, TurnOutput
+    import app.conversation.runner as runner
+    from app.session_engine import run_engine
+    from app.store.memory_store import store
+
+    # The model returns advice-adjacent prose AND self-reports tax_advice.
+    leaky = TurnOutput(
+        reply_text=(
+            "Ja, Ihr Arbeitszimmer ist steuerlich absetzbar! "
+            "Wollen Sie das direkt geltend machen?"  # advice prose ending in a question
+        ),
+        escalation=EscalationSignal(
+            triggered=True, category="tax_advice",
+            client_utterance="Kann ich mein Arbeitszimmer absetzen?",
+            reason="deductibility judgment",
+        ),
+    )
+    monkeypatch.setattr(runner, "complete_turn", lambda *a, **k: leaky)
+
+    state = store.create("steuerkanzlei_mueller")
+    run_engine(state)
+    result = runner.run_turn(state, "Kann ich mein Arbeitszimmer absetzen?")
+
+    reply = result["reply_text"]
+    assert result["escalated"] is True
+    # None of the model's advice prose survives.
+    assert "absetzbar" not in reply
+    assert "geltend machen" not in reply
+    # The handoff copy is present and it defers to the consultant.
+    assert "Frau Weber" in reply

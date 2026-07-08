@@ -175,28 +175,52 @@ markdown fences. The object MUST have exactly these keys:
   "client_utterance": string|null, "reason": string|null }}.
 - `conversation_complete` (boolean): true on your closing turn.
 
+Keep it tight (this also keeps the conversation fast):
+- `reply_text` is ONE short, warm interview question or a brief checkpoint — not an
+  essay. A sentence or two. Do not re-explain things you've already said.
+- `profile_update.field_updates` contains ONLY the fields that CHANGED this turn.
+  Never echo the whole profile.
+- You MAY omit the `escalation` object entirely on an ordinary turn (nothing
+  crossed the boundary); include it only when `triggered` is true.
+
 Example of a well-formed turn:
 {example}"""
+
+
+def build_stable_prefix(ruleset: Ruleset) -> str:
+    """The part of the system prompt that NEVER changes within a session: role/flow,
+    the guardrail, the interview script, and the output contract. Assembled only from
+    constant strings (no timestamps/ids), so it's byte-identical every turn — which
+    lets DeepSeek's automatic prefix cache hit on turns 2+ (saves prefill/TTFT).
+    """
+    return "\n\n".join(
+        [ROLE_AND_FLOW, GUARDRAIL, _interview_script(ruleset), _output_contract()]
+    )
+
+
+def _compact_profile(profile: Profile) -> str:
+    """Serialize only the SET profile fields, compactly. Dropping the ~unset half of
+    the fields and the pretty-print whitespace shrinks the volatile tail we resend
+    every turn (that tail is never cached, so every token there is full price)."""
+    data = {k: v for k, v in profile.model_dump().items() if v not in (None, [], {})}
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
 def build_system_prompt(profile: Profile, ruleset: Ruleset, doc_status: str) -> str:
     """Assemble the full system prompt for a turn.
 
-    `doc_status` is a compact rendering of the latest engine result (required /
-    excluded / pending) so the model narrates FROM the engine, never asserting
-    applicability itself.
+    Layout: the STABLE PREFIX first (cacheable, byte-identical every turn), then the
+    VOLATILE TAIL (profile + engine doc-status) that changes each turn. `doc_status`
+    is a compact rendering of the latest engine result so the model narrates FROM the
+    engine, never asserting applicability itself.
     """
-    profile_json = profile.model_dump_json(indent=2)
-    return "\n\n".join(
-        [
-            ROLE_AND_FLOW,
-            GUARDRAIL,
-            _interview_script(ruleset),
-            f"## CURRENT PROFILE (facts already collected — never re-ask these)\n{profile_json}",
-            f"## CURRENT DOCUMENT STATUS (from the ruleset engine — narrate only from this)\n{doc_status}",
-            _output_contract(),
-        ]
+    tail = (
+        "## CURRENT PROFILE (facts already collected — never re-ask these)\n"
+        f"{_compact_profile(profile)}\n\n"
+        "## CURRENT DOCUMENT STATUS (from the ruleset engine — narrate only from this)\n"
+        f"{doc_status}"
     )
+    return build_stable_prefix(ruleset) + "\n\n" + tail
 
 
 def render_doc_status(required, excluded, pending) -> str:

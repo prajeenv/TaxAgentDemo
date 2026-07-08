@@ -113,15 +113,7 @@ export function ChatWindow() {
           {messages.map((m, i) => (
             <MessageBubble key={i} message={m} />
           ))}
-          {sending && (
-            <div className="flex justify-start">
-              <div className="rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink-2">
-                <span className="inline-flex gap-1">
-                  <Dot /> <Dot /> <Dot />
-                </span>
-              </div>
-            </div>
-          )}
+          {sending && <TypingStatus />}
           {complete && <EndStateCard />}
         </div>
 
@@ -172,6 +164,37 @@ function EndStateCard() {
         Zu den steuerlichen Ergebnissen (etwa einer möglichen Erstattung) kann ich
         nichts sagen — das entscheidet Ihre Steuerberaterin.
       </p>
+    </div>
+  );
+}
+
+// A staged, timer-advanced status shown while a turn is in flight. It makes a
+// 6-10s wait read as progress rather than a hang. GUARDRAIL RULE: it is strictly
+// CONTENT-FREE — it never says anything about tax content or an outcome (no "let me
+// check if that's deductible…"), which would be the over-eager-reassurance failure
+// the reserved-advice boundary exists to prevent.
+const TYPING_STAGES: { after: number; text: string }[] = [
+  { after: 0, text: "Einen Moment…" },
+  { after: 2500, text: "Ich notiere das…" },
+  { after: 5500, text: "Fast fertig…" },
+];
+
+function TypingStatus() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timers = TYPING_STAGES.slice(1).map((s, i) =>
+      setTimeout(() => setStage(i + 1), s.after),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  return (
+    <div className="flex justify-start">
+      <div className="flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink-2">
+        <span className="inline-flex gap-1">
+          <Dot /> <Dot /> <Dot />
+        </span>
+        <span>{TYPING_STAGES[stage].text}</span>
+      </div>
     </div>
   );
 }
