@@ -29,7 +29,7 @@ export function ChatWindow() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [startupError, setStartupError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function ChatWindow() {
           { role: "assistant", text: r.opening_turn, checkpoint: false, escalated: false },
         ]);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setStartupError(String(e)));
   }, []);
 
   useEffect(() => {
@@ -74,7 +74,8 @@ export function ChatWindow() {
       setComplete(r.complete);
     } catch {
       // Network/backend hiccup — show a warm, recoverable message as an agent turn
-      // and put the client's text back so they can simply resend.
+      // and put the client's text back so they can simply resend. (This is transient,
+      // per-turn feedback shown inline as an agent message — NOT a persistent banner.)
       setMessages((m) => [
         ...m,
         {
@@ -101,6 +102,13 @@ export function ChatWindow() {
           </p>
         </header>
 
+        {startupError && (
+          <div className="border-b border-warn/30 bg-warn-tint px-5 py-2 text-sm text-warn">
+            Die Sitzung konnte nicht gestartet werden. Läuft der Server? Bitte laden
+            Sie die Seite neu.
+          </div>
+        )}
+
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-5">
           {messages.map((m, i) => (
             <MessageBubble key={i} message={m} />
@@ -115,11 +123,6 @@ export function ChatWindow() {
             </div>
           )}
           {complete && <EndStateCard />}
-          {error && (
-            <div className="rounded-md bg-warn-tint px-3 py-2 text-sm text-warn">
-              {error}
-            </div>
-          )}
         </div>
 
         <div className="border-t border-line bg-surface p-4">
