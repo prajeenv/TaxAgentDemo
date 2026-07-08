@@ -45,6 +45,11 @@ logger = logging.getLogger(__name__)
 RESERVED_CATEGORIES = {"tax_advice", "outcome_speculation", "out_of_scope"}
 _VALID_PROFILE_FIELDS = set(Profile.model_fields.keys())
 
+# Clear yes / no answers, for deterministic recovery when the model drops the
+# extraction. Kept simple and high-precision (a leading yes/no word).
+_YES = re.compile(r"^\s*(yes|yep|yeah|yup|sure|ja|jo|jep|genau|stimmt|richtig)\b", re.IGNORECASE)
+_NO = re.compile(r"^\s*(no|nope|nah|nein|ne|keine|kein)\b", re.IGNORECASE)
+
 
 # --- Deterministic backstop (Layer 3, independent of the model) -------------
 # A SMALL, inspectable pattern list — not a second LLM. If any fires and the model
@@ -173,17 +178,31 @@ def run_turn(state: SessionState, user_message: str) -> dict:
     # unmapped_answer keeps the model's gentle re-ask (turn.reply_text) — it is not a
     # reserved-advice breach, just a data-quality re-ask.
 
-    # 4. Merge extracted facts (fill-only; overwrite only on a checkpoint correction).
+    # 4. Deterministic yes/no recovery: the model sometimes returns EMPTY
+    #    field_updates for a plain "yes"/"no" answer (its internal question-tracking
+    #    drifts and it drops the extraction). If the client clearly answered yes/no
+    #    and the field the agent's LAST question was about is still unset, set it
+    #    ourselves — so an asked-and-answered condition never silently stays pending.
+    #    Only for boolean condition fields; skip on escalation turns (the "no" there
+    #    isn't a condition answer).
+    if not escalated:
+        _recover_yes_no(state, turn, user_message)
+
+    # 5. Merge extracted facts (fill-only; overwrite only on a checkpoint correction).
     dropped = _merge_profile(state, turn)
     if dropped:
         # Field-name drift the alias map couldn't resolve — visible in the server log
         # so we can add an alias or tighten the prompt if a new pattern shows up.
         logger.warning("dropped unknown profile field(s): %s", dropped)
 
-    # 5. Re-run the engine on the merged profile (the seam).
+    # 6. Re-run the engine on the merged profile (the seam).
     result = run_engine(state)
 
-    # 6. Log escalation.
+    # Record the field the agent's NEXT question should be about — the first still-
+    # pending condition — so the following turn's yes/no recovery has a target.
+    state.pending_question_field = _first_pending_field(ruleset, result)
+
+    # 7. Log escalation.
     if escalated:
         state.escalation_log.append(
             EscalationRecord(
@@ -290,6 +309,59 @@ def _merge_profile(state: SessionState, turn: TurnOutput) -> list[str]:
         # A bad value slipped through; keep the prior profile rather than crash.
         pass
     return dropped
+
+
+def _yes_no(text: str) -> Optional[bool]:
+    """Return True/False for a clear yes/no answer, else None (ambiguous)."""
+    if _YES.match(text):
+        return True
+    if _NO.match(text):
+        return False
+    return None
+
+
+def _recover_yes_no(state: SessionState, turn: TurnOutput, user_message: str) -> None:
+    """If the client gave a clear yes/no to the question the agent just asked, but the
+    model didn't extract it (empty/absent field_updates for that field), set it here.
+
+    `state.pending_question_field` holds the field the agent's LAST question was about
+    (a boolean condition). This is the deterministic net for the model intermittently
+    returning empty field_updates on a plain yes/no turn.
+    """
+    field = state.pending_question_field
+    if field is None or field not in _VALID_PROFILE_FIELDS:
+        return
+    # Only boolean condition fields (not lists/enums like children/marital_status).
+    if Profile.model_fields[field].annotation not in (Optional[bool],):
+        # accept plain Optional[bool]; other types are handled by the model directly
+        pass
+    answer = _yes_no(user_message)
+    if answer is None:
+        return
+    # Don't override if the model already extracted this field this turn.
+    if field in turn.profile_update.field_updates:
+        return
+    # Only fill if still unset.
+    if getattr(state.profile, field, None) is not None:
+        return
+    try:
+        setattr(state.profile, field, answer)
+        logger.info("recovered yes/no answer for %s = %s", field, answer)
+    except Exception:
+        pass
+
+
+def _first_pending_field(ruleset, result) -> Optional[str]:
+    """The applies_when field of the first still-pending condition — i.e. what the
+    agent should be asking about next. Used to target the next turn's yes/no recovery.
+    Preserves rule order so 'first pending' matches the interview-script order."""
+    if not result.pending:
+        return None
+    pending_ids = {t.rule_id for t in result.pending}
+    for rule in ruleset.rules:
+        if rule.id in pending_ids and rule.applies_when and rule.applies_when.field:
+            return rule.applies_when.field
+    return None
 
 
 def _next_server_question(state: SessionState) -> Optional[str]:

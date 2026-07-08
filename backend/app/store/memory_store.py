@@ -37,6 +37,10 @@ class SessionState(BaseModel):
     escalation_log: list[EscalationRecord] = Field(default_factory=list)
     approved: bool = False
     complete: bool = False
+    # The profile field the agent's LAST question was about. Lets the runner
+    # deterministically recover a bare yes/no answer when the model drops the
+    # extraction (returns empty field_updates) — see runner._recover_yes_no.
+    pending_question_field: Optional[str] = None
 
 
 class SessionStore:
