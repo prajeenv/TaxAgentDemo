@@ -37,15 +37,24 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
 Message = dict[str, str]  # {"role": "user"|"assistant", "content": str}
 
-# Latency / reliability tuning (measured against deepseek-v4-flash):
-#  - THINKING DISABLED is the big one (set on the call via extra_body). With thinking
-#    on, this task runs ~8-9s/turn with high variance (the model burns 400-1400
-#    tokens on an internal reasoning chain it doesn't need for structured extraction).
-#    Off: ~3s/turn, ~150-200 output tokens, tight and reliable. This is the API
-#    equivalent of the "deep thinking" toggle in the DeepSeek chat.
-#  - max_tokens=2000 gives headroom so JSON never truncates (finish_reason=length ->
-#    a costly retry). With thinking off, turns use far less than this.
-#  - low temperature keeps JSON structure reliable (fewer retries).
+# Thinking mode (DEEPSEEK_THINKING env; default ENABLED):
+#  - ENABLED (default): the agent REASONS about the conversation — it asks the tax
+#    year, follows up on vague answers ("you said your workplace changed — tell me
+#    more"), and infers what to ask next. This is the product thesis: an intelligent
+#    agent, not a form. Cost: ~8-9s/turn (the reasoning chain), softened by the UI's
+#    staged typing status. The determination stays deterministic regardless (the
+#    engine, not the model, decides documents), so richer conversation never risks
+#    the reserved-advice boundary.
+#  - DISABLED: ~3s/turn but the agent is thinner — it follows the script more
+#    mechanically and probes less. Fine for a pure form-filling style; not for the
+#    "infers hundreds of cases" production vision.
+#  max_tokens=2000 gives headroom so JSON never truncates (finish_reason=length ->
+#  a costly retry). Low temperature keeps JSON structure reliable.
+_THINKING_ENABLED = os.getenv("DEEPSEEK_THINKING", "enabled").lower() != "disabled"
+_THINKING_KW = (
+    {} if _THINKING_ENABLED
+    else {"extra_body": {"thinking": {"type": "disabled"}}}
+)
 _MAX_TOKENS = 2000
 _TEMPERATURE = 0.2
 
@@ -142,16 +151,7 @@ def _complete_deepseek(system: str, messages: list[Message]) -> TurnOutput:
             response_format={"type": "json_object"},
             temperature=_TEMPERATURE,
             max_tokens=_MAX_TOKENS,
-            # Thinking DISABLED — this is the API equivalent of turning off "deep
-            # thinking" in the DeepSeek chat UI. This task is structured fact-
-            # extraction + instruction-following, not deep reasoning; with thinking
-            # on, deepseek-v4-flash burns 400-1400 tokens/turn on an internal
-            # reasoning chain (~8-9s, high variance). Off: ~150-200 output tokens,
-            # ~3s, 5/5 valid JSON. The reserved-advice guardrail is RE-VALIDATED with
-            # thinking off (test_guardrail_llm.py) + the deterministic backstop
-            # protects the dangerous categories regardless. Passed via extra_body
-            # since the openai SDK types don't include it.
-            extra_body={"thinking": {"type": "disabled"}},
+            **_THINKING_KW,
         )
         return resp.choices[0].message.content or ""
 
