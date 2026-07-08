@@ -13,7 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    // lang="de" matches the German UI (stops the browser offering to translate it);
+    // suppressHydrationWarning tolerates attributes injected by translate/extensions
+    // on <html> after SSR (the standard Next.js remedy for that hydration mismatch).
+    <html lang="de" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );
